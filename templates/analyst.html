@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+
+    <title>Analyst Dashboard</title>
+
+    <link
+        rel="stylesheet"
+        href="{{ url_for('static', filename='style.css') }}"
+    >
+
+    <meta
+        http-equiv="refresh"
+        content="10"
+    >
+
+</head>
+
+<body>
+
+<div class="container">
+
+    <div class="topbar">
+
+        <div>
+
+            <h1>Analyst Dashboard</h1>
+
+            <p>
+                Welcome,
+                <b>{{ session["name"] }}</b>
+            </p>
+
+        </div>
+
+        <a
+            href="{{ url_for('logout') }}"
+            class="logout"
+        >
+            Logout
+        </a>
+
+    </div>
+
+
+    {% with messages = get_flashed_messages() %}
+
+        {% if messages %}
+
+            {% for message in messages %}
+
+                <div class="success-message">
+                    {{ message }}
+                </div>
+
+            {% endfor %}
+
+        {% endif %}
+
+    {% endwith %}
+
+
+    <!-- APPLY BREAK -->
+
+    <div class="card">
+
+        <h2>Apply for Break</h2>
+
+        <form
+            method="POST"
+            action="{{ url_for('apply_break') }}"
+        >
+
+            <label>
+                Break Duration
+            </label>
+
+            <select
+                name="break_duration"
+                required
+            >
+
+                <option value="">
+                    Select break
+                </option>
+
+                <option value="15 Minutes">
+                    15 Minutes
+                </option>
+
+                <option value="30 Minutes">
+                    30 Minutes
+                </option>
+
+            </select>
+
+
+            <button
+                type="submit"
+                class="primary-button"
+            >
+                Submit Break Request
+            </button>
+
+        </form>
+
+    </div>
+
+
+    <!-- FLOW -->
+
+    <div class="card">
+
+        <h2>Approval Flow</h2>
+
+        <div class="flow">
+
+            <span>SME Hyderabad</span>
+            →
+            <span>SME Kolkata</span>
+            →
+            <span>QA Hyderabad</span>
+            →
+            <span>QA Kolkata</span>
+            →
+            <span>Team Lead</span>
+
+        </div>
+
+    </div>
+
+
+    <!-- HISTORY -->
+
+    <div class="card">
+
+        <h2>My Break Requests</h2>
+
+        <div class="table-container">
+
+            <table>
+
+                <thead>
+
+                    <tr>
+
+                        <th>ID</th>
+
+                        <th>Break</th>
+
+                        <th>Current Approver</th>
+
+                        <th>Status</th>
+
+                        <th>Created</th>
+
+                    </tr>
+
+                </thead>
+
+                <tbody>
+
+                {% for item in requests %}
+
+                    <tr>
+
+                        <td>
+                            #{{ item["id"] }}
+                        </td>
+
+                        <td>
+                            {{ item["break_duration"] }}
+                        </td>
+
+                        <td>
+
+                            {% if item["status"] == "PENDING" %}
+
+                                {{ role_names[item["current_role"]] }}
+
+                            {% else %}
+
+                                -
+
+                            {% endif %}
+
+                        </td>
+
+                        <td>
+
+                            {% if item["status"] == "PENDING" %}
+
+                                <span class="badge pending">
+                                    Pending
+                                </span>
+
+                            {% elif item["status"] == "APPROVED" %}
+
+                                <span class="badge approved">
+                                    Approved
+                                </span>
+
+                            {% elif item["status"] == "REJECTED" %}
+
+                                <span class="badge rejected">
+                                    Rejected
+                                </span>
+
+                            {% else %}
+
+                                <span class="badge">
+                                    {{ item["status"] }}
+                                </span>
+
+                            {% endif %}
+
+                        </td>
+
+                        <td>
+
+                            {{ item["created_at"] | int }}
+
+                        </td>
+
+                    </tr>
+
+                {% else %}
+
+                    <tr>
+
+                        <td
+                            colspan="5"
+                            class="empty"
+                        >
+                            No break requests yet.
+                        </td>
+
+                    </tr>
+
+                {% endfor %}
+
+                </tbody>
+
+            </table>
+
+        </div>
+
+    </div>
+
+</div>
+
+</body>
+
+</html>

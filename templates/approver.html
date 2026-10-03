@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+
+    <title>Approver Dashboard</title>
+
+    <link
+        rel="stylesheet"
+        href="{{ url_for('static', filename='style.css') }}"
+    >
+
+    <meta
+        http-equiv="refresh"
+        content="5"
+    >
+
+</head>
+
+<body>
+
+<div class="container">
+
+    <div class="topbar">
+
+        <div>
+
+            <h1>{{ current_role_name }}</h1>
+
+            <p>
+                Approval Dashboard
+            </p>
+
+        </div>
+
+        <a
+            href="{{ url_for('logout') }}"
+            class="logout"
+        >
+            Logout
+        </a>
+
+    </div>
+
+
+    {% with messages = get_flashed_messages() %}
+
+        {% if messages %}
+
+            {% for message in messages %}
+
+                <div class="success-message">
+                    {{ message }}
+                </div>
+
+            {% endfor %}
+
+        {% endif %}
+
+    {% endwith %}
+
+
+    <!-- CURRENT APPROVER -->
+
+    <div class="card">
+
+        <h2>
+            Pending Break Requests
+        </h2>
+
+        <p>
+            Requests currently waiting for
+            <b>{{ current_role_name }}</b>
+        </p>
+
+    </div>
+
+
+    <!-- REQUESTS -->
+
+    <div class="card">
+
+        <div class="table-container">
+
+            <table>
+
+                <thead>
+
+                    <tr>
+
+                        <th>ID</th>
+
+                        <th>Analyst</th>
+
+                        <th>Break Duration</th>
+
+                        <th>Requested Time</th>
+
+                        <th>Action</th>
+
+                    </tr>
+
+                </thead>
+
+                <tbody>
+
+                {% for item in requests %}
+
+                    <tr>
+
+                        <td>
+                            #{{ item["id"] }}
+                        </td>
+
+                        <td>
+                            <b>
+                                {{ item["analyst_name"] }}
+                            </b>
+                        </td>
+
+                        <td>
+
+                            <span class="break-duration">
+
+                                {{ item["break_duration"] }}
+
+                            </span>
+
+                        </td>
+
+                        <td>
+
+                            {{ item["created_at"] | int }}
+
+                        </td>
+
+                        <td>
+
+                            <div class="action-buttons">
+
+                                <form
+                                    method="POST"
+                                    action="{{ url_for('approve_break', break_id=item['id']) }}"
+                                >
+
+                                    <button
+                                        type="submit"
+                                        class="approve-button"
+                                    >
+                                        Approve
+                                    </button>
+
+                                </form>
+
+
+                                <form
+                                    method="POST"
+                                    action="{{ url_for('reject_break', break_id=item['id']) }}"
+                                >
+
+                                    <button
+                                        type="submit"
+                                        class="reject-button"
+                                    >
+                                        Reject
+                                    </button>
+
+                                </form>
+
+                            </div>
+
+                        </td>
+
+                    </tr>
+
+                {% else %}
+
+                    <tr>
+
+                        <td
+                            colspan="5"
+                            class="empty"
+                        >
+
+                            No pending break requests.
+
+                        </td>
+
+                    </tr>
+
+                {% endfor %}
+
+                </tbody>
+
+            </table>
+
+        </div>
+
+    </div>
+
+
+    <!-- FLOW -->
+
+    <div class="card">
+
+        <h2>
+            Escalation Flow
+        </h2>
+
+        <div class="flow">
+
+            <span>SME Hyderabad</span>
+
+            →
+
+            <span>SME Kolkata</span>
+
+            →
+
+            <span>QA Hyderabad</span>
+
+            →
+
+            <span>QA Kolkata</span>
+
+            →
+
+            <span>Team Lead</span>
+
+        </div>
+
+    </div>
+
+</div>
+
+</body>
+
+</html>
