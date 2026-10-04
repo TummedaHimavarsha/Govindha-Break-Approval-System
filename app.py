@@ -3,7 +3,9 @@ from werkzeug.security import generate_password_hash, check_password_hash
 import sqlite3
 import threading
 import time
+import os
 from functools import wraps
+
 
 app = Flask(__name__)
 
@@ -11,9 +13,17 @@ app = Flask(__name__)
 # CONFIGURATION
 # ==========================================================
 
-app.secret_key = "CHANGE_THIS_TO_A_RANDOM_SECRET_KEY"
+# IMPORTANT:
+# For production, change this to a strong random secret
+app.secret_key = os.environ.get(
+    "SECRET_KEY",
+    "CHANGE_THIS_TO_A_RANDOM_SECRET_KEY"
+)
 
-DATABASE = "break_approval.db"
+# Database location
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DATABASE = os.path.join(BASE_DIR, "break_approval.db")
+
 
 # ----------------------------------------------------------
 # TESTING:
@@ -56,6 +66,7 @@ ROLE_NAMES = {
 # ==========================================================
 
 def get_db():
+
     connection = sqlite3.connect(
         DATABASE,
         timeout=30
@@ -70,7 +81,10 @@ def init_database():
 
     connection = get_db()
 
-    # USERS
+    # ======================================================
+    # USERS TABLE
+    # ======================================================
+
     connection.execute("""
         CREATE TABLE IF NOT EXISTS users (
 
@@ -87,7 +101,10 @@ def init_database():
         )
     """)
 
-    # BREAK REQUESTS
+    # ======================================================
+    # BREAK REQUESTS TABLE
+    # ======================================================
+
     connection.execute("""
         CREATE TABLE IF NOT EXISTS break_requests (
 
@@ -114,7 +131,10 @@ def init_database():
         )
     """)
 
-    # APPROVAL HISTORY
+    # ======================================================
+    # APPROVAL HISTORY TABLE
+    # ======================================================
+
     connection.execute("""
         CREATE TABLE IF NOT EXISTS approval_history (
 
@@ -135,9 +155,9 @@ def init_database():
 
     connection.commit()
 
-    # ------------------------------------------------------
-    # CREATE DEFAULT USERS
-    # ------------------------------------------------------
+    # ======================================================
+    # DEFAULT USERS
+    # ======================================================
 
     default_users = [
 
@@ -221,6 +241,8 @@ def init_database():
 
     connection.close()
 
+    print("Database initialized successfully.")
+
 
 # ==========================================================
 # LOGIN REQUIRED
@@ -280,17 +302,22 @@ def role_required(*allowed_roles):
 # LOGIN
 # ==========================================================
 
-@app.route("/login", methods=["GET", "POST"])
+@app.route(
+    "/login",
+    methods=["GET", "POST"]
+)
 def login():
 
     if request.method == "POST":
 
         username = request.form.get(
-            "username"
-        )
+            "username",
+            ""
+        ).strip()
 
         password = request.form.get(
-            "password"
+            "password",
+            ""
         )
 
         connection = get_db()
@@ -423,7 +450,10 @@ def apply_break():
 
     connection = get_db()
 
+    # ------------------------------------------------------
     # Prevent multiple pending requests
+    # ------------------------------------------------------
+
     existing = connection.execute(
         """
         SELECT id
@@ -447,6 +477,10 @@ def apply_break():
         )
 
     current_time = time.time()
+
+    # ------------------------------------------------------
+    # Create break request
+    # ------------------------------------------------------
 
     cursor = connection.execute(
         """
@@ -472,6 +506,10 @@ def apply_break():
     )
 
     break_id = cursor.lastrowid
+
+    # ------------------------------------------------------
+    # Approval history
+    # ------------------------------------------------------
 
     connection.execute(
         """
@@ -530,6 +568,7 @@ def approver_dashboard():
         SELECT
             break_requests.*,
             users.name AS analyst_name
+
         FROM break_requests
 
         JOIN users
@@ -579,6 +618,7 @@ def approve_break(break_id):
         """
         SELECT *
         FROM break_requests
+
         WHERE id = ?
 
         AND current_role = ?
@@ -606,7 +646,7 @@ def approve_break(break_id):
     now = time.time()
 
     # ------------------------------------------------------
-    # APPROVE
+    # Approve request
     # ------------------------------------------------------
 
     connection.execute(
@@ -628,6 +668,10 @@ def approve_break(break_id):
             break_id
         )
     )
+
+    # ------------------------------------------------------
+    # Approval history
+    # ------------------------------------------------------
 
     connection.execute(
         """
@@ -715,6 +759,10 @@ def reject_break(break_id):
 
     now = time.time()
 
+    # ------------------------------------------------------
+    # Reject request
+    # ------------------------------------------------------
+
     connection.execute(
         """
         UPDATE break_requests
@@ -734,6 +782,10 @@ def reject_break(break_id):
             break_id
         )
     )
+
+    # ------------------------------------------------------
+    # Approval history
+    # ------------------------------------------------------
 
     connection.execute(
         """
@@ -775,6 +827,8 @@ def reject_break(break_id):
 
 def escalation_worker():
 
+    print("Automatic escalation worker started.")
+
     while True:
 
         try:
@@ -804,14 +858,23 @@ def escalation_worker():
 
                     continue
 
-                current_role = (
-                    request_data["current_role"]
-                )
+                current_role = request_data["current_role"]
 
-                current_index = (
-                    APPROVAL_FLOW.index(
-                        current_role
+                # --------------------------------------------------
+                # Safety check
+                # --------------------------------------------------
+
+                if current_role not in APPROVAL_FLOW:
+
+                    print(
+                        f"Unknown role for break #{request_data['id']}: "
+                        f"{current_role}"
                     )
+
+                    continue
+
+                current_index = APPROVAL_FLOW.index(
+                    current_role
                 )
 
                 # --------------------------------------------------
@@ -822,11 +885,9 @@ def escalation_worker():
                     APPROVAL_FLOW
                 ) - 1:
 
-                    next_role = (
-                        APPROVAL_FLOW[
-                            current_index + 1
-                        ]
-                    )
+                    next_role = APPROVAL_FLOW[
+                        current_index + 1
+                    ]
 
                     connection.execute(
                         """
@@ -837,6 +898,8 @@ def escalation_worker():
                             updated_at = ?
 
                         WHERE id = ?
+
+                        AND status = 'PENDING'
                         """,
                         (
                             next_role,
@@ -889,6 +952,8 @@ def escalation_worker():
                             updated_at = ?
 
                         WHERE id = ?
+
+                        AND status = 'PENDING'
                         """,
                         (
                             current_time,
@@ -918,6 +983,11 @@ def escalation_worker():
                         )
                     )
 
+                    print(
+                        f"Break #{request_data['id']} "
+                        f"escalation completed."
+                    )
+
             connection.commit()
 
             connection.close()
@@ -931,30 +1001,41 @@ def escalation_worker():
 
 
 # ==========================================================
-# START APPLICATION
+# DATABASE INITIALIZATION
+# ==========================================================
+
+# IMPORTANT:
+# This runs when Gunicorn imports this file on Render.
+#
+# This fixes:
+# sqlite3.OperationalError:
+# no such table: users
+#
+init_database()
+
+
+# ==========================================================
+# START AUTOMATIC ESCALATION WORKER
+# ==========================================================
+
+# Start the worker when the application is loaded.
+#
+# This is important because Render uses Gunicorn and therefore
+# does not execute this file as __main__.
+
+escalation_thread = threading.Thread(
+    target=escalation_worker,
+    daemon=True
+)
+
+escalation_thread.start()
+
+
+# ==========================================================
+# LOCAL DEVELOPMENT
 # ==========================================================
 
 if __name__ == "__main__":
-
-    init_database()
-
-    escalation_thread = threading.Thread(
-        target=escalation_worker,
-        daemon=True
-    )
-
-    escalation_thread.start()
-
-    print("")
-    print("========================================")
-    print("      BREAK APPROVAL SYSTEM")
-    print("========================================")
-    print("")
-    print("Open:")
-    print("http://127.0.0.1:5000")
-    print("")
-    print("TEST TIMEOUT:", APPROVAL_TIMEOUT, "seconds")
-    print("")
 
     app.run(
         host="0.0.0.0",
